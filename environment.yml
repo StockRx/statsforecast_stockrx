@@ -1,4 +1,4 @@
-name: statsforecast_stockrx
+name: statsforecast
 channels:
   - conda-forge
 dependencies:
