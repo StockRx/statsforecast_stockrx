@@ -2980,6 +2980,32 @@ def _window_average(
     mean = _repeat_val(val=wavg, h=h)
     return {"mean": mean}
 
+
+@njit
+def _window_average2(
+    y: np.ndarray,  # time series
+    h: int,  # forecasting horizon
+    fitted: bool,  # fitted values
+    window_size: int,  # window size
+):
+    if fitted:
+        raise NotImplementedError("return fitted")
+    if y.size < window_size:
+        return {"mean": np.full(h, np.nan, np.float32)}
+    
+    array = y[-window_size:]
+    wavg = np.mean(array)
+    
+    list_of_means=[wavg]
+    for i in range(h-1):
+        array = np.append(array,wavg)
+        array = np.delete(array,0)
+        wavg=array.mean()
+        list_of_means.append(wavg)
+           
+    return {"mean": list_of_means}
+
+
 # %% ../nbs/models.ipynb 218
 class WindowAverage(_TS):
     def __init__(self, window_size: int, alias: str = "WindowAverage"):
@@ -3102,7 +3128,9 @@ class WindowAverage(_TS):
         forecasts : dict
             Dictionary with entries `mean` for point predictions and `level_*` for probabilistic predictions.
         """
-        out = _window_average(y=y, h=h, fitted=fitted, window_size=self.window_size)
+#         out = _window_average(y=y, h=h, fitted=fitted, window_size=self.window_size)
+        out = _window_average2(y=y, h=h, fitted=fitted, window_size=self.window_size)
+           
         return out
 
 # %% ../nbs/models.ipynb 228
