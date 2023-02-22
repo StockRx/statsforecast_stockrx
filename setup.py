@@ -33,7 +33,7 @@ fugue_requirements = cfg.get('fugue_requirements', '').split()
 ray_requirements = cfg.get('ray_requirements', '').split()
 
 setuptools.setup(
-    name = 'statsforecast',
+    name = 'statsforecast-stockrx',
     license = lic[0],
     classifiers = [
         'Development Status :: ' + statuses[int(cfg['status'])],
