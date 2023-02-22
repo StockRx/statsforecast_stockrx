@@ -4,7 +4,8 @@
 __all__ = ['AutoARIMA', 'AutoETS', 'ETS', 'AutoCES', 'AutoTheta', 'ARIMA', 'AutoRegressive', 'SimpleExponentialSmoothing',
            'SimpleExponentialSmoothingOptimized', 'SeasonalExponentialSmoothing',
            'SeasonalExponentialSmoothingOptimized', 'Holt', 'HoltWinters', 'HistoricAverage', 'Naive',
-           'RandomWalkWithDrift', 'SeasonalNaive', 'WindowAverage', 'SeasonalWindowAverage', 'ExponentialMovingAverage', 'ADIDA', 'CrostonClassic',
+           'RandomWalkWithDrift', 'SeasonalNaive', 'WindowAverage', 'WindowAverage2', 'WindowAverage3', 'SeasonalWindowAverage', 'ExponentialMovingAverage', 'ExponentialMovingAverage',
+           'ExponentialMovingAverage2', 'ExponentialMovingAverage3','ADIDA', 'CrostonClassic', 'WindowAverageOriginal',
            'CrostonOptimized', 'CrostonSBA', 'IMAPA', 'TSB', 'MSTL', 'Theta', 'OptimizedTheta', 'DynamicTheta',
            'DynamicOptimizedTheta', 'GARCH', 'ARCH']
 
@@ -2976,8 +2977,10 @@ def _window_average(
         raise NotImplementedError("return fitted")
     if y.size < window_size:
         return {"mean": np.full(h, np.nan, np.float32)}
+
     wavg = y[-window_size:].mean()
     mean = _repeat_val(val=wavg, h=h)
+
     return {"mean": mean}
 
 
@@ -3002,9 +3005,136 @@ def _window_average2(
         array = np.delete(array,0)
         wavg=array.mean()
         list_of_means.append(wavg)
-           
-    return {"mean": list_of_means}
 
+
+    return {"mean": np.array(list_of_means)}
+
+
+class WindowAverageOriginal(_TS):
+    def __init__(self, window_size: int, alias: str = "WindowAverageOriginal"):
+        """WindowAverage model.
+
+        Uses the average of the last $k$ observations, with $k$ the length of the window.
+        Wider windows will capture global trends, while narrow windows will reveal local trends.
+        The length of the window selected should take into account the importance of past
+        observations and how fast the series changes.
+
+        **References:**<br>
+        [Rob J. Hyndman and George Athanasopoulos (2018). "forecasting principles and practice, Simple Methods"](https://otexts.com/fpp3/simple-methods.html).
+
+        Parameters
+        ----------
+        window_size : int
+            Size of truncated series on which average is estimated.
+        alias : str
+            Custom name of the model.
+        """
+        self.window_size = window_size
+        self.alias = alias
+
+    def __repr__(self):
+        return self.alias
+
+    def fit(
+            self,
+            y: np.ndarray,
+            X: Optional[np.ndarray] = None,
+    ):
+        """Fit the WindowAverage model.
+
+        Fit an WindowAverage to a time series (numpy array) `y`
+        and optionally exogenous variables (numpy array) `X`.
+
+        Parameters
+        ----------
+        y : numpy.array
+            Clean time series of shape (t, ).
+        X : array-like
+            Optional exogenous of shape (t, n_x).
+
+        Returns
+        -------
+        self :
+            WindowAverage fitted model.
+        """
+        mod = _window_average(y=y, h=1, window_size=self.window_size, fitted=False)
+        self.model_ = dict(mod)
+        return self
+
+    def predict(
+            self,
+            h: int,
+            X: Optional[np.ndarray] = None,
+    ):
+        """Predict with fitted WindowAverage.
+
+        Parameters
+        ----------
+        h : int
+            Forecast horizon.
+
+        Returns
+        -------
+        forecasts : dict
+            Dictionary with entries `mean` for point predictions and `level_*` for probabilistic predictions.
+        """
+        mean = _repeat_val(self.model_["mean"][0], h=h)
+        res = {"mean": mean}
+        return res
+
+    def predict_in_sample(self):
+        """Access fitted WindowAverage insample predictions.
+
+        Parameters
+        ----------
+        level : List[float]
+            Confidence levels (0-100) for prediction intervals.
+
+        Returns
+        -------
+        forecasts : dict
+            Dictionary with entries `mean` for point predictions and `level_*` for probabilistic predictions.
+        """
+        raise NotImplementedError
+
+    def forecast(
+            self,
+            y: np.ndarray,
+            h: int,
+            X: Optional[np.ndarray] = None,
+            X_future: Optional[np.ndarray] = None,
+            fitted: bool = False,
+    ):
+        """Memory Efficient WindowAverage predictions.
+
+        This method avoids memory burden due from object storage.
+        It is analogous to `fit_predict` without storing information.
+        It assumes you know the forecast horizon in advance.
+
+        Parameters
+        ----------
+        y : numpy.array
+            Clean time series of shape (n, ).
+        h : int
+            Forecast horizon.
+        X : array-like
+            Optional insample exogenous of shape (t, n_x).
+        X_future : array-like
+            Optional exogenous of shape (h, n_x).
+        level : List[float]
+            Confidence levels (0-100) for prediction intervals.
+        fitted : bool
+            Whether or not to return insample predictions.
+
+        Returns
+        -------
+        forecasts : dict
+            Dictionary with entries `mean` for point predictions and `level_*` for probabilistic predictions.
+        """
+        out = _window_average(y=y, h=h, fitted=fitted, window_size=self.window_size)
+        # out = _window_average2(y=y, h=h, fitted=fitted, window_size=self.window_size)
+
+        return out
 
 # %% ../nbs/models.ipynb 218
 class WindowAverage(_TS):
@@ -3103,6 +3233,132 @@ class WindowAverage(_TS):
         fitted: bool = False,
     ):
         """Memory Efficient WindowAverage predictions.
+        This method avoids memory burden due from object storage.
+        It is analogous to `fit_predict` without storing information.
+        It assumes you know the forecast horizon in advance.
+        Parameters
+        ----------
+        y : numpy.array
+            Clean time series of shape (n, ).
+        h : int
+            Forecast horizon.
+        X : array-like
+            Optional insample exogenous of shape (t, n_x).
+        X_future : array-like
+            Optional exogenous of shape (h, n_x).
+        level : List[float]
+            Confidence levels (0-100) for prediction intervals.
+        fitted : bool
+            Whether or not to return insample predictions.
+
+        Returns
+        -------
+        forecasts : dict
+            Dictionary with entries `mean` for point predictions and `level_*` for probabilistic predictions.
+        """
+#         out = _window_average(y=y, h=h, fitted=fitted, window_size=self.window_size)
+        out = _window_average2(y=y, h=h, fitted=fitted, window_size=self.window_size)
+           
+        return out
+
+
+# %% ../nbs/models.ipynb 218
+class WindowAverage3(_TS):
+    def __init__(self, window_size: int, alias: str = "WindowAverage3"):
+        """WindowAverage model.
+
+        Uses the average of the last $k$ observations, with $k$ the length of the window.
+        Wider windows will capture global trends, while narrow windows will reveal local trends.
+        The length of the window selected should take into account the importance of past
+        observations and how fast the series changes.
+
+        **References:**<br>
+        [Rob J. Hyndman and George Athanasopoulos (2018). "forecasting principles and practice, Simple Methods"](https://otexts.com/fpp3/simple-methods.html).
+
+        Parameters
+        ----------
+        window_size : int
+            Size of truncated series on which average is estimated.
+        alias : str
+            Custom name of the model.
+        """
+        self.window_size = window_size
+        self.alias = alias
+
+    def __repr__(self):
+        return self.alias
+
+    def fit(
+            self,
+            y: np.ndarray,
+            X: Optional[np.ndarray] = None,
+    ):
+        """Fit the WindowAverage model.
+
+        Fit an WindowAverage to a time series (numpy array) `y`
+        and optionally exogenous variables (numpy array) `X`.
+
+        Parameters
+        ----------
+        y : numpy.array
+            Clean time series of shape (t, ).
+        X : array-like
+            Optional exogenous of shape (t, n_x).
+
+        Returns
+        -------
+        self :
+            WindowAverage fitted model.
+        """
+        mod = _window_average(y=y, h=1, window_size=self.window_size, fitted=False)
+        self.model_ = dict(mod)
+        return self
+
+    def predict(
+            self,
+            h: int,
+            X: Optional[np.ndarray] = None,
+    ):
+        """Predict with fitted WindowAverage.
+
+        Parameters
+        ----------
+        h : int
+            Forecast horizon.
+
+        Returns
+        -------
+        forecasts : dict
+            Dictionary with entries `mean` for point predictions and `level_*` for probabilistic predictions.
+        """
+        mean = _repeat_val(self.model_["mean"][0], h=h)
+        res = {"mean": mean}
+        return res
+
+    def predict_in_sample(self):
+        """Access fitted WindowAverage insample predictions.
+
+        Parameters
+        ----------
+        level : List[float]
+            Confidence levels (0-100) for prediction intervals.
+
+        Returns
+        -------
+        forecasts : dict
+            Dictionary with entries `mean` for point predictions and `level_*` for probabilistic predictions.
+        """
+        raise NotImplementedError
+
+    def forecast(
+            self,
+            y: np.ndarray,
+            h: int,
+            X: Optional[np.ndarray] = None,
+            X_future: Optional[np.ndarray] = None,
+            fitted: bool = False,
+    ):
+        """Memory Efficient WindowAverage predictions.
 
         This method avoids memory burden due from object storage.
         It is analogous to `fit_predict` without storing information.
@@ -3128,9 +3384,137 @@ class WindowAverage(_TS):
         forecasts : dict
             Dictionary with entries `mean` for point predictions and `level_*` for probabilistic predictions.
         """
-#         out = _window_average(y=y, h=h, fitted=fitted, window_size=self.window_size)
+        #         out = _window_average(y=y, h=h, fitted=fitted, window_size=self.window_size)
         out = _window_average2(y=y, h=h, fitted=fitted, window_size=self.window_size)
-           
+
+        return out
+
+
+# %% ../nbs/models.ipynb 218
+class WindowAverage2(_TS):
+    def __init__(self, window_size: int, alias: str = "WindowAverage2"):
+        """WindowAverage model.
+
+        Uses the average of the last $k$ observations, with $k$ the length of the window.
+        Wider windows will capture global trends, while narrow windows will reveal local trends.
+        The length of the window selected should take into account the importance of past
+        observations and how fast the series changes.
+
+        **References:**<br>
+        [Rob J. Hyndman and George Athanasopoulos (2018). "forecasting principles and practice, Simple Methods"](https://otexts.com/fpp3/simple-methods.html).
+
+        Parameters
+        ----------
+        window_size : int
+            Size of truncated series on which average is estimated.
+        alias : str
+            Custom name of the model.
+        """
+        self.window_size = window_size
+        self.alias = alias
+
+    def __repr__(self):
+        return self.alias
+
+    def fit(
+            self,
+            y: np.ndarray,
+            X: Optional[np.ndarray] = None,
+    ):
+        """Fit the WindowAverage model.
+
+        Fit an WindowAverage to a time series (numpy array) `y`
+        and optionally exogenous variables (numpy array) `X`.
+
+        Parameters
+        ----------
+        y : numpy.array
+            Clean time series of shape (t, ).
+        X : array-like
+            Optional exogenous of shape (t, n_x).
+
+        Returns
+        -------
+        self :
+            WindowAverage fitted model.
+        """
+        mod = _window_average(y=y, h=1, window_size=self.window_size, fitted=False)
+        self.model_ = dict(mod)
+        return self
+
+    def predict(
+            self,
+            h: int,
+            X: Optional[np.ndarray] = None,
+    ):
+        """Predict with fitted WindowAverage.
+
+        Parameters
+        ----------
+        h : int
+            Forecast horizon.
+
+        Returns
+        -------
+        forecasts : dict
+            Dictionary with entries `mean` for point predictions and `level_*` for probabilistic predictions.
+        """
+        mean = _repeat_val(self.model_["mean"][0], h=h)
+        res = {"mean": mean}
+        return res
+
+    def predict_in_sample(self):
+        """Access fitted WindowAverage insample predictions.
+
+        Parameters
+        ----------
+        level : List[float]
+            Confidence levels (0-100) for prediction intervals.
+
+        Returns
+        -------
+        forecasts : dict
+            Dictionary with entries `mean` for point predictions and `level_*` for probabilistic predictions.
+        """
+        raise NotImplementedError
+
+    def forecast(
+            self,
+            y: np.ndarray,
+            h: int,
+            X: Optional[np.ndarray] = None,
+            X_future: Optional[np.ndarray] = None,
+            fitted: bool = False,
+    ):
+        """Memory Efficient WindowAverage predictions.
+
+        This method avoids memory burden due from object storage.
+        It is analogous to `fit_predict` without storing information.
+        It assumes you know the forecast horizon in advance.
+
+        Parameters
+        ----------
+        y : numpy.array
+            Clean time series of shape (n, ).
+        h : int
+            Forecast horizon.
+        X : array-like
+            Optional insample exogenous of shape (t, n_x).
+        X_future : array-like
+            Optional exogenous of shape (h, n_x).
+        level : List[float]
+            Confidence levels (0-100) for prediction intervals.
+        fitted : bool
+            Whether or not to return insample predictions.
+
+        Returns
+        -------
+        forecasts : dict
+            Dictionary with entries `mean` for point predictions and `level_*` for probabilistic predictions.
+        """
+        #         out = _window_average(y=y, h=h, fitted=fitted, window_size=self.window_size)
+        out = _window_average2(y=y, h=h, fitted=fitted, window_size=self.window_size)
+
         return out
 
 # %% ../nbs/models.ipynb 228
@@ -4508,6 +4892,98 @@ class ExponentialMovingAverage(_TS):
         X: Optional[np.ndarray] = None,
         X_future: Optional[np.ndarray] = None,
         fitted: bool = False,
+    ):
+        """Memory Efficient WindowAverage predictions.
+
+        This method avoids memory burden due from object storage.
+        It is analogous to `fit_predict` without storing information.
+        It assumes you know the forecast horizon in advance.
+
+        **Parameters:**<br>
+        `y`: numpy array of shape (n,), clean time series.<br>
+        `h`: int, forecast horizon.<br>
+        `level`: float list 0-100, confidence levels for prediction intervals.<br>
+        `fitted`: bool, wether or not returns insample predictions.<br>
+
+        **Returns:**<br>
+        `forecasts`: dictionary, with entries 'mean' for point predictions and
+            'level_*' for probabilistic predictions.<br>
+        """
+        out = numpy_ewma_vectorized_v2(y=y, h=h, fitted=fitted, window_size=self.window_size)
+        return out
+
+
+class ExponentialMovingAverage2(_TS):
+    def __init__(self, window_size: int):
+        """ExponentialMovingAverage model.
+
+        Uses the average of the last $k$ observations, with $k$ the length of the window.
+        Wider windows will capture global trends, while narrow windows will reveal local trends.
+        The length of the window selected should take into account the importance of past
+        observations and how fast the series changes.
+
+        **Parameters:**<br>
+        `window_size`: int, size of truncated series on which average is estimated.
+
+        """
+        self.window_size = window_size
+
+    def __repr__(self):
+        return "ExponentialMovingAverage2"
+
+    def forecast(
+            self,
+            y: np.ndarray,
+            h: int,
+            X: Optional[np.ndarray] = None,
+            X_future: Optional[np.ndarray] = None,
+            fitted: bool = False,
+    ):
+        """Memory Efficient WindowAverage predictions.
+
+        This method avoids memory burden due from object storage.
+        It is analogous to `fit_predict` without storing information.
+        It assumes you know the forecast horizon in advance.
+
+        **Parameters:**<br>
+        `y`: numpy array of shape (n,), clean time series.<br>
+        `h`: int, forecast horizon.<br>
+        `level`: float list 0-100, confidence levels for prediction intervals.<br>
+        `fitted`: bool, wether or not returns insample predictions.<br>
+
+        **Returns:**<br>
+        `forecasts`: dictionary, with entries 'mean' for point predictions and
+            'level_*' for probabilistic predictions.<br>
+        """
+        out = numpy_ewma_vectorized_v2(y=y, h=h, fitted=fitted, window_size=self.window_size)
+        return out
+
+
+class ExponentialMovingAverage3(_TS):
+    def __init__(self, window_size: int):
+        """ExponentialMovingAverage model.
+
+        Uses the average of the last $k$ observations, with $k$ the length of the window.
+        Wider windows will capture global trends, while narrow windows will reveal local trends.
+        The length of the window selected should take into account the importance of past
+        observations and how fast the series changes.
+
+        **Parameters:**<br>
+        `window_size`: int, size of truncated series on which average is estimated.
+
+        """
+        self.window_size = window_size
+
+    def __repr__(self):
+        return "ExponentialMovingAverage3"
+
+    def forecast(
+            self,
+            y: np.ndarray,
+            h: int,
+            X: Optional[np.ndarray] = None,
+            X_future: Optional[np.ndarray] = None,
+            fitted: bool = False,
     ):
         """Memory Efficient WindowAverage predictions.
 
