@@ -4,7 +4,7 @@
 __all__ = ['AutoARIMA', 'AutoETS', 'ETS', 'AutoCES', 'AutoTheta', 'ARIMA', 'AutoRegressive', 'SimpleExponentialSmoothing',
            'SimpleExponentialSmoothingOptimized', 'SeasonalExponentialSmoothing',
            'SeasonalExponentialSmoothingOptimized', 'Holt', 'HoltWinters', 'HistoricAverage', 'Naive',
-           'RandomWalkWithDrift', 'SeasonalNaive', 'WindowAverage', 'SeasonalWindowAverage', 'ADIDA', 'CrostonClassic',
+           'RandomWalkWithDrift', 'SeasonalNaive', 'WindowAverage', 'SeasonalWindowAverage', 'ExponentialMovingAverage', 'ADIDA', 'CrostonClassic',
            'CrostonOptimized', 'CrostonSBA', 'IMAPA', 'TSB', 'MSTL', 'Theta', 'OptimizedTheta', 'DynamicTheta',
            'DynamicOptimizedTheta', 'GARCH', 'ARCH']
 
@@ -4454,6 +4454,82 @@ class DynamicTheta(AutoTheta):
             decomposition_type=decomposition_type,
             alias=alias,
         )
+
+class ExponentialMovingAverage(_TS):
+    def __init__(self, window_size: int):
+        """ExponentialMovingAverage model.
+
+        Uses the average of the last $k$ observations, with $k$ the length of the window.
+        Wider windows will capture global trends, while narrow windows will reveal local trends.
+        The length of the window selected should take into account the importance of past
+        observations and how fast the series changes.
+
+        **Parameters:**<br>
+        `window_size`: int, size of truncated series on which average is estimated.
+
+        """
+        self.window_size = window_size
+
+    def __repr__(self):
+        return "ExponentialMovingAverage"
+    
+    def forecast(
+        self,
+        y: np.ndarray,
+        h: int,
+        X: Optional[np.ndarray] = None,
+        X_future: Optional[np.ndarray] = None,
+        fitted: bool = False,
+    ):
+        """Memory Efficient WindowAverage predictions.
+
+        This method avoids memory burden due from object storage.
+        It is analogous to `fit_predict` without storing information.
+        It assumes you know the forecast horizon in advance.
+
+        **Parameters:**<br>
+        `y`: numpy array of shape (n,), clean time series.<br>
+        `h`: int, forecast horizon.<br>
+        `level`: float list 0-100, confidence levels for prediction intervals.<br>
+        `fitted`: bool, wether or not returns insample predictions.<br>
+
+        **Returns:**<br>
+        `forecasts`: dictionary, with entries 'mean' for point predictions and
+            'level_*' for probabilistic predictions.<br>
+        """
+        out = numpy_ewma_vectorized_v2(y=y, h=h, fitted=fitted, window_size=self.window_size)
+        return out
+
+@njit
+def numpy_ewma_vectorized_v2(
+    y: np.ndarray, 
+    h:int, 
+    fitted: bool, 
+    window_size: int):
+
+    if fitted:
+        raise NotImplementedError("return fitted")
+    if y.size < window_size:
+        return {"mean": np.full(h, np.nan, np.float32)}
+    
+    alpha = 2 /(window_size + 1.0)
+    alpha_rev = 1-alpha
+    n = y.shape[0]
+
+    pows = alpha_rev**(np.arange(n+1))
+
+    scale_arr = 1/pows[:-1]
+    offset = y[0]*pows[1:]
+    pw0 = alpha*alpha_rev**(n-1)
+
+    mult = y*pw0*scale_arr
+    cumsums = mult.cumsum()
+    out = offset + cumsums*scale_arr[::-1]
+
+    forecast = out[-1]
+    mean = _repeat_val(val=forecast, h=h)
+           
+    return {"mean": mean}
 
 # %% ../nbs/models.ipynb 357
 class DynamicOptimizedTheta(AutoTheta):
