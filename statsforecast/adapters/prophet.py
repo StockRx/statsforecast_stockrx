@@ -88,7 +88,7 @@ class AutoARIMAProphet(Prophet):
         changepoint_prior_scale=0.05,
         mcmc_samples=0,
         interval_width=0.80,
-        uncertainty_samples=1000,
+        uncertainty_samples=0,
         stan_backend=None,
         d=None,
         D=None,
