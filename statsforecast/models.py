@@ -140,7 +140,7 @@ class AutoProphet(_TS):
 
     def forecast(
         self,
-        y: pd.DataFrame,
+        y: np.ndarray,
         h: int,
         X: Optional[np.ndarray] = None,
         X_future: Optional[np.ndarray] = None,
@@ -148,7 +148,6 @@ class AutoProphet(_TS):
         fitted: bool = False):
         
         model = AutoARIMAProphet()
-        print(y)
         model.fit(self.df)
         future_df = model.make_future_dataframe(h, freq = 'W-MON')
         fcast = model.predict(future_df)
