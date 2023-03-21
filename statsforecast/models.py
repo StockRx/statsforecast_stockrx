@@ -7,7 +7,7 @@ __all__ = ['AutoARIMA', 'AutoETS', 'ETS', 'AutoCES', 'AutoTheta', 'ARIMA', 'Auto
            'RandomWalkWithDrift', 'SeasonalNaive', 'WindowAverage', 'WindowAverage2', 'WindowAverage3', 'SeasonalWindowAverage', 'ExponentialMovingAverage', 'ExponentialMovingAverage',
            'ExponentialMovingAverage2', 'ExponentialMovingAverage3','ADIDA', 'CrostonClassic', 'WindowAverageOriginal',
            'CrostonOptimized', 'CrostonSBA', 'IMAPA', 'TSB', 'MSTL', 'Theta', 'OptimizedTheta', 'DynamicTheta',
-           'DynamicOptimizedTheta', 'GARCH', 'ARCH']
+           'DynamicOptimizedTheta', 'GARCH', 'ARCH', 'AutoProphet']
 
 # %% ../nbs/models.ipynb 5
 import warnings
@@ -18,6 +18,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import numpy as np
 from numba import njit
 from scipy.optimize import minimize
+
+import sys
 
 from statsforecast.arima import (
     Arima,
@@ -41,12 +43,118 @@ from statsforecast.utils import (
     _calculate_intervals,
 )
 
+if sys.version_info.minor != 6 or (sys.platform not in ["win32", "cygwin"]):
+    try:
+        from prophet import Prophet
+    except ModuleNotFoundError as e:
+        msg = (
+            "{e}. To use prophet adapters you have to install "
+            "prophet. Please run `pip install prophet`. "
+            "Note that it is recommended to install prophet "
+            "using conda environments due to dependencies."
+        )
+        raise ModuleNotFoundError(msg) from e
+elif sys.version_info.minor == 6 and (sys.platform in ["win32", "cygwin"]):
+    try:
+        from fbprophet import Prophet
+    except ModuleNotFoundError as e:
+        msg = (
+            "{e}. To use prophet adapters you have to install "
+            "fbprophet. Please run `pip install fbprophet`. "
+            "Note that it is recommended to install prophet "
+            "using conda environments due to dependencies."
+        )
+        raise ModuleNotFoundError(msg) from e
+
 # %% ../nbs/models.ipynb 8
 class _TS:
     def new(self):
         b = type(self).__new__(type(self))
         b.__dict__.update(self.__dict__)
         return b
+
+from .adapters.prophet import AutoARIMAProphet
+
+class AutoProphet(_TS):
+    
+    """AutoARIMAProphet adapter.
+
+    Returns best ARIMA model using external variables created by the Prophet interface.
+    This class receives as parameters the same as prophet.Prophet and uses a `models.AutoARIMA`
+    backend.
+
+    If your forecasting pipeline uses Prophet the `AutoARIMAProphet` adapter helps to
+    easily substitute Prophet with an AutoARIMA.
+
+    **Parameters:**<br>
+    `growth`: String 'linear', 'logistic' or 'flat' to specify a linear, logistic or flat trend.<br>
+    `changepoints`: List of dates of potential changepoints. Otherwise selected automatically.<br>
+    `n_changepoints`: Number of potential changepoints to include.<br>
+    `changepoint_range`: Proportion of history in which trend changepoints will be estimated.<br>
+    `yearly_seasonality`: Fit yearly seasonality.
+        Can be 'auto', True, False, or a number of Fourier terms to generate.<br>
+    `weekly_seasonality`: Fit weekly seasonality.
+        Can be 'auto', True, False, or a number of Fourier terms to generate.<br>
+    `daily_seasonality`: Fit daily seasonality.
+        Can be 'auto', True, False, or a number of Fourier terms to generate.<br>
+    `holidays`: pandas.DataFrame with columns holiday (string) and ds (date type).<br>
+    `interval_width`: float, uncertainty forecast intervals width. `StatsForecast`'s level <br>
+
+    **Notes:**<br>
+    You can create automated exogenous variables from the Prophet data processing pipeline
+    these exogenous will be included into `AutoARIMA`'s exogenous features. Parameters like
+    `seasonality_mode`, `seasonality_prior_scale`, `holidays_prior_scale`, `changepoint_prior_scale`,
+    `mcmc_samples`, `uncertainty_samples`, `stan_backend` are Prophet exclusive.
+
+    **References:**<br>
+    [Sean J. Taylor, Benjamin Letham (2017). "Prophet Forecasting at Scale"](https://peerj.com/preprints/3190.pdf)
+
+    [Oskar Triebe, Hansika Hewamalage, Polina Pilyugina, Nikolay Laptev, Christoph Bergmeir, Ram Rajagopal (2021). "NeuralProphet: Explainable Forecasting at Scale".](https://arxiv.org/pdf/2111.15397.pdf)
+
+    [Rob J. Hyndman, Yeasmin Khandakar (2008). "Automatic Time Series Forecasting: The forecast package for R"](https://www.jstatsoft.org/article/view/v027i03).
+    """
+    def __init__(self, df, alias: str = "AutoProphet"):
+        """WindowAverage model.
+
+        Uses the average of the last $k$ observations, with $k$ the length of the window.
+        Wider windows will capture global trends, while narrow windows will reveal local trends.
+        The length of the window selected should take into account the importance of past
+        observations and how fast the series changes.
+
+        **References:**<br>
+        [Rob J. Hyndman and George Athanasopoulos (2018). "forecasting principles and practice, Simple Methods"](https://otexts.com/fpp3/simple-methods.html).
+
+        Parameters
+        ----------
+        window_size : int
+            Size of truncated series on which average is estimated.
+        alias : str
+            Custom name of the model.
+        """
+        self.df = df
+        # self.window_size = window_size
+        self.alias = alias
+
+    def __repr__(self):
+        return self.alias
+
+    def forecast(
+        self,
+        y: pd.DataFrame,
+        h: int,
+        X: Optional[np.ndarray] = None,
+        X_future: Optional[np.ndarray] = None,
+        level: Optional[List[int]] = None,
+        fitted: bool = False):
+        
+        model = AutoARIMAProphet()
+        print(y)
+        model.fit(self.df)
+        future_df = model.make_future_dataframe(h, freq = 'W-MON')
+        fcast = model.predict(future_df)
+        
+        out = {"mean": fcast['yhat'][-h:].to_list()}
+        return out
 
 # %% ../nbs/models.ipynb 9
 def _add_fitted_pi(res, se, level):
